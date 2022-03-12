@@ -302,4 +302,7 @@ def myprofile(message):
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
-client.polling(none_stop=True, interval=0)
+try:
+    client.polling(none_stop=True, interval=0)
+except:
+    client.polling(none_stop=True, interval=0)
