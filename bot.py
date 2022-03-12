@@ -31,6 +31,7 @@ db.commit()
 
 def check_license(uid, cid):
     user = sql.execute(f"SELECT * FROM users WHERE id = {uid}").fetchall()[0]
+    print(user)
     current_date = datetime.today()
     die_to = datetime.strptime(user[3], "%Y-%m-%d %H:%M:%S.%f")
     if current_date < die_to:
@@ -94,32 +95,34 @@ def start(message):
 
 @client.message_handler(commands=["servers"])
 def buy(message):
-    try:
-        cid = message.chat.id
-        uid = message.from_user.id
-        if not check_license(uid, cid):
-            return
-        text = "🌏 Выберите сервер"
-        rmk = types.InlineKeyboardMarkup(row_width=2)
-        buttons = []
-        for servers in sql.execute(f"SELECT * FROM vpns"):
-            if not os.listdir(f"vpns/{servers[0]}"):
-                continue
-            buttons.append(
-                types.InlineKeyboardButton(
-                    text=f"{servers[1]} {servers[2]}",
-                    callback_data=f"select_{servers[0]}",
-                ),
-            )
-        rmk.add(*buttons)
-        client.send_message(
-            cid,
-            text,
-            parse_mode="Markdown",
-            reply_markup=rmk,
+    # try:
+    cid = message.chat.id
+    uid = message.from_user.id
+    if not check_license(uid, cid):
+        return
+    text = "🌏 Выберите сервер"
+    rmk = types.InlineKeyboardMarkup(row_width=2)
+    buttons = []
+    for servers in sql.execute(f"SELECT * FROM vpns"):
+        if not os.listdir(f"vpns/{servers[0]}"):
+            continue
+        buttons.append(
+            types.InlineKeyboardButton(
+                text=f"{servers[1]} {servers[2]}",
+                callback_data=f"select_{servers[0]}",
+            ),
         )
-    except:
-        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+    rmk.add(*buttons)
+    client.send_message(
+        cid,
+        text,
+        parse_mode="Markdown",
+        reply_markup=rmk,
+    )
+
+
+# except:
+#     client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
 @client.callback_query_handler(lambda call: call.data.partition("_")[0] == "select")
@@ -302,7 +305,4 @@ def myprofile(message):
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
-try:
-    client.polling(none_stop=True, interval=0)
-except:
-    client.polling(none_stop=True, interval=0)
+client.polling(none_stop=True, interval=0)
