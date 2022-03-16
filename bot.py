@@ -8,32 +8,26 @@ import threading
 from SimpleQIWI import *
 from datetime import datetime, timedelta
 
+from pymongo import MongoClient
+
+mongo_client = MongoClient("mongodb://localhost:27017/")
+db = mongo_client.vpn_bot
+users_collection = db.users
+
 client = telebot.TeleBot(configure.config["tokenbot"])
-db = sqlite3.connect("baza.db", check_same_thread=False)
-sql = db.cursor()
-lock = threading.Lock()
 api = QApi(token=configure.config["tokenqiwi"], phone=configure.config["phoneqiwi"])
 
 pay_help_str = f"[Оплата картой]({configure.config['pay_card_url']})\n[Оплата qiwi]({configure.config['pay_qiwi_url']})"
 download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
 help_str = f"[Настройка для windows]({configure.config['help_windows_url']})\n[Настройка для mac]({configure.config['help_mac_url']})\n[Настройка для android]({configure.config['help_android_url']})\n[Настройка для iphone]({configure.config['help_windows_url']})"
 
-trial_minutes = 30
-
-sql.execute(
-    """CREATE TABLE IF NOT EXISTS users (id BIGINT, access INT, die_to text, payments INT)"""
-)
-sql.execute(
-    """CREATE TABLE IF NOT EXISTS vpns (id INT, name TEXT, flag TEXT, use INT)"""
-)
-db.commit()
+trial_minutes = 300
 
 
 def check_license(uid, cid):
-    user = sql.execute(f"SELECT * FROM users WHERE id = {uid}").fetchall()[0]
+    user = users_collection.find_one({"_id": uid})
     current_date = datetime.today()
-    die_to = datetime.strptime(user[2], "%Y-%m-%d %H:%M:%S.%f")
-    if current_date < die_to:
+    if current_date < user["die_to"]:
         return True
     client.send_message(cid, f"⛔️ Лицензия закончилась!")
     return False
@@ -55,13 +49,11 @@ def check_payment(payid, price):
             return True
 
 
-def set_license(date_str, uid, days):
-    die_to = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f")
+def set_license(die_to, uid, days):
     new_die_to = die_to + timedelta(days=days)
-    sql.execute(
-        f"UPDATE users SET payments = payments + 1, die_to = '{new_die_to}' WHERE id = {uid}"
+    db.users.update_one(
+        {"_id": uid}, {"$inc": {"payments": 1}, "$set": {"die_to": new_die_to}}
     )
-    db.commit()
 
 
 @client.message_handler(commands=["start"])
@@ -70,14 +62,15 @@ def start(message):
         cid = message.chat.id
         uid = message.from_user.id
         current_date = datetime.today() + timedelta(minutes=trial_minutes)
-        if sql.execute(f"SELECT id FROM users WHERE id = {uid}").fetchone() is None:
-            sql.execute(f"INSERT INTO users VALUES ({uid}, 0, '{current_date}', 0)")
+        if users_collection.find_one({"_id": uid}) is None:
+            users_collection.insert_one(
+                {"_id": uid, "access": 0, "die_to": current_date, "payments": 0}
+            )
             client.send_message(
                 cid,
-                f"✋ Добро пожаловать!\n\nЭтот бот поможет вам установить vpn на ваши устройства\nБез лицензии вы можете получать случайный сервер раз в день\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд",
+                f"✋ Добро пожаловать!\n\nЭтот бот поможет вам установить vpn на ваши устройства\nБез лицензии вы можете получать случайный сервер раз в день\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд\n\nВам доступно {trial_minutes} минут бесплатного доступа",
                 parse_mode="Markdown",
             )
-            db.commit()
         else:
             client.send_message(
                 cid,
@@ -90,32 +83,30 @@ def start(message):
 
 @client.message_handler(commands=["servers"])
 def buy(message):
-    try:
-        cid = message.chat.id
-        uid = message.from_user.id
-        if not check_license(uid, cid):
-            return
-        text = "🌏 Выберите сервер"
-        rmk = types.InlineKeyboardMarkup(row_width=2)
-        buttons = []
-        for servers in sql.execute(f"SELECT * FROM vpns"):
-            if not os.listdir(f"vpns/{servers[0]}"):
-                continue
-            buttons.append(
-                types.InlineKeyboardButton(
-                    text=f"{servers[1]} {servers[2]}",
-                    callback_data=f"select_{servers[0]}",
-                ),
-            )
-        rmk.add(*buttons)
-        client.send_message(
-            cid,
-            text,
-            parse_mode="Markdown",
-            reply_markup=rmk,
+
+    cid = message.chat.id
+    uid = message.from_user.id
+    if not check_license(uid, cid):
+        return
+    text = f"🌏 Выберите сервер"
+    rmk = types.InlineKeyboardMarkup(row_width=2)
+    buttons = []
+    for server in os.listdir("vpns"):
+        if not os.listdir(f"vpns/{server}"):
+            continue
+        buttons.append(
+            types.InlineKeyboardButton(
+                text=f"{server}",
+                callback_data=f"select_{server}",
+            ),
         )
-    except:
-        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+    rmk.add(*buttons)
+    client.send_message(
+        cid,
+        f"{text}" + "\n",
+        parse_mode="Markdown",
+        reply_markup=rmk,
+    )
 
 
 @client.callback_query_handler(lambda call: call.data.partition("_")[0] == "select")
@@ -124,21 +115,20 @@ def select_callback(call):
         if call.data.partition("_")[0] == "select":
             if not check_license(call.from_user.id, call.message.chat.id):
                 return
-            vpnid = int(call.data.partition("_")[2])
-            for servers in sql.execute(f"SELECT * FROM vpns WHERE id = {vpnid}"):
-                configs_dir = f"vpns/{str(servers[0])}"
-                config_file = open(
-                    os.path.join(configs_dir, random.choice(os.listdir(configs_dir)))
-                )
-                client.send_document(
-                    call.message.chat.id,
-                    config_file,
-                    caption=f"{servers[1]} {servers[2]}\n\nНажмите на /manuals для просмотра видео по настройке vpn",
-                    visible_file_name=f"{servers[1]}.ovpn".replace(" ", "").lower(),
-                    parse_mode="Markdown",
-                )
-                sql.execute(f"UPDATE vpns SET use = use + 1 WHERE id = {vpnid}")
-                db.commit()
+            server = call.data.partition("_")[2]
+            configs_dir = f"vpns/{server}"
+            config_file = open(
+                os.path.join(configs_dir, random.choice(os.listdir(configs_dir)))
+            )
+            client.send_document(
+                call.message.chat.id,
+                config_file,
+                caption=f"{server}\n\nНажмите на /manuals для просмотра видео по настройке vpn",
+                visible_file_name=f"{server.replace(' ', '')[:-1]}.ovpn".replace(
+                    " ", ""
+                ).lower(),
+                parse_mode="Markdown",
+            )
         client.answer_callback_query(callback_query_id=call.id)
     except:
         client.send_message(call.message.chat.id, f"🚫 Ошибка при выполнении команды")
@@ -149,16 +139,16 @@ def myprofile(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
-        info = sql.execute(f"SELECT * FROM users WHERE id = {uid}").fetchone()
-        if info[1] == 0:
+        user = users_collection.find_one({"_id": uid})
+        if user["access"] == 0:
             accessname = "Пользователь"
-        elif info[1] == 1:
+        elif user["access"] == 1:
             accessname = "Администратор"
-        elif info[1] == 777:
+        elif user["access"] == 777:
             accessname = "Разработчик"
         client.send_message(
             cid,
-            f"*📇 Ваш профиль*\n\n*👤 Ваш ID:* {info[0]}\n*⏳ Ваша лицензия до:* {':'.join(info[2].split(':')[:-1])}\n*👑 Ваш уровень доступа:* {accessname}",
+            f"*📇 Ваш профиль*\n\n*👤 Ваш ID:* {user['_id']}\n*⏳ Ваша лицензия до:* {user['die_to'].strftime('%d-%m-%Y %H:%M')}\n*👑 Ваш уровень доступа:* {accessname}",
             parse_mode="Markdown",
         )
     except:
@@ -170,9 +160,9 @@ def buy(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
-        info = sql.execute(f"SELECT * FROM users WHERE id = {uid}").fetchone()
-        text = f"🛒 *Купить лицензию через qiwi или картой*\n\n⏳ Ваша лицензия до:* {':'.join(info[2].split(':')[:-1])}\n\n*"
-        payid = str(uid) + str(info[3])
+        user = users_collection.find_one({"_id": uid})
+        text = f"🛒 *Купить лицензию через qiwi или картой*\n\n⏳ Ваша лицензия до:* {user['die_to'].strftime('%d-%m-%Y %H:%M')}\n\n*"
+        payid = str(uid) + str(user["payments"])
         rmk = types.InlineKeyboardMarkup()
         day1 = types.InlineKeyboardButton(text="1️⃣ = 25₽", url=get_buy_url(payid, 25))
         day3 = types.InlineKeyboardButton(text="3️⃣ = 75₽", url=get_buy_url(payid, 75))
@@ -206,10 +196,10 @@ def success_pay(call):
         if call.data == "success_pay":
             uid = call.from_user.id
             cid = call.message.chat.id
-            user = sql.execute(f"SELECT * FROM users WHERE id = {uid}").fetchone()
-            payid = str(uid) + str(user[3])
+            user = users_collection.find_one({"_id": uid})
+            payid = str(uid) + str(user["payments"])
             if check_payment(payid, 25):
-                set_license(user[2], uid, 1)
+                set_license(user["die_to"], uid, 1)
                 client.send_message(
                     cid,
                     f"✅ Лицензия оплачена на 1 день!\n\nНажмите /servers для выбор сервера",
@@ -218,7 +208,7 @@ def success_pay(call):
                 )
                 return
             if check_payment(payid, 75):
-                set_license(user[2], uid, 3)
+                set_license(user["die_to"], uid, 3)
                 client.send_message(
                     cid,
                     f"✅ Лицензия оплачена на 3 дня!\n\nНажмите /servers для выбор сервера",
@@ -227,7 +217,7 @@ def success_pay(call):
                 )
                 return
             if check_payment(payid, 150):
-                set_license(user[2], uid, 7)
+                set_license(user["die_to"], uid, 7)
                 client.send_message(
                     cid,
                     f"✅ Лицензия оплачена на 7 дней!\n\nНажмите /servers для выбор сервера",
@@ -236,7 +226,7 @@ def success_pay(call):
                 )
                 return
             if check_payment(payid, 300):
-                set_license(user[2], uid, 14)
+                set_license(user["die_to"], uid, 14)
                 client.send_message(
                     cid,
                     f"✅ Лицензия оплачена на 14 дней!\n\nНажмите /servers для выбор сервера",
@@ -245,7 +235,7 @@ def success_pay(call):
                 )
                 return
             if check_payment(payid, 600):
-                set_license(user[2], uid, 30)
+                set_license(user["die_to"], uid, 30)
                 client.send_message(
                     cid,
                     f"✅ Лицензия оплачена на 30 дней!\n\nНажмите /servers для выбор сервера",
@@ -262,23 +252,24 @@ def success_pay(call):
 
 @client.message_handler(commands=["help"])
 def helpcmd(message):
-    cid = message.chat.id
-    uid = message.from_user.id
-    with lock:
-        sql.execute(f"SELECT * FROM users WHERE id = {uid}")
-        getaccess = sql.fetchone()[1]
-    if getaccess >= 1:
-        client.send_message(
-            cid,
-            "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
-            parse_mode="Markdown",
-        )
-    else:
-        client.send_message(
-            cid,
-            "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
-            parse_mode="Markdown",
-        )
+    try:
+        cid = message.chat.id
+        uid = message.from_user.id
+        user = users_collection.find_one({"_id": uid})
+        if user["access"] >= 1:
+            client.send_message(
+                cid,
+                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
+                parse_mode="Markdown",
+            )
+        else:
+            client.send_message(
+                cid,
+                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
+                parse_mode="Markdown",
+            )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
 @client.message_handler(commands=["manuals"])
@@ -296,4 +287,4 @@ def myprofile(message):
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
-client.polling(none_stop=True, interval=0)
+client.infinity_polling(timeout=10, long_polling_timeout=5)
