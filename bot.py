@@ -28,7 +28,7 @@ else:
     download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
     help_str = f"[Настройка для windows]({config['HELP_WINDOWS_URL']})\n[Настройка для mac]({config['HELP_MAC_URL']})\n[Настройка для android]({config['HELP_ANDROID_URL']})\n[Настройка для iphone]({config['HELP_IPHONE_URL']})"
     pay_help_str = f"[Оплата картой]({config['CARD_PAY_URL_HELP']})\n[Оплата qiwi]({config['QIWI_PAY_URL_HELP']})"
-    trial_minutes = int(config["TRIAL_MINUTES"])
+    trial_minutes = config["TRIAL_MINUTES"]
 
 users_collection = db.users
 
@@ -69,7 +69,7 @@ def start(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
-        current_date = datetime.today() + timedelta(minutes=trial_minutes)
+        current_date = datetime.today() + timedelta(minutes=int(trial_minutes))
         if users_collection.find_one({"_id": uid}) is None:
             users_collection.insert_one(
                 {"_id": uid, "access": 0, "die_to": current_date, "payments": 0}
@@ -91,30 +91,32 @@ def start(message):
 
 @client.message_handler(commands=["servers"])
 def buy(message):
-
-    cid = message.chat.id
-    uid = message.from_user.id
-    if not check_license(uid, cid):
-        return
-    text = f"🌏 Выберите сервер"
-    rmk = types.InlineKeyboardMarkup(row_width=2)
-    buttons = []
-    for server in os.listdir("vpns"):
-        if not os.listdir(f"vpns/{server}"):
-            continue
-        buttons.append(
-            types.InlineKeyboardButton(
-                text=f"{server}",
-                callback_data=f"select_{server}",
-            ),
+    try:
+        cid = message.chat.id
+        uid = message.from_user.id
+        if not check_license(uid, cid):
+            return
+        text = f"🌏 Выберите сервер"
+        rmk = types.InlineKeyboardMarkup(row_width=2)
+        buttons = []
+        for server in os.listdir("vpns"):
+            if not os.listdir(f"vpns/{server}"):
+                continue
+            buttons.append(
+                types.InlineKeyboardButton(
+                    text=f"{server}",
+                    callback_data=f"select_{server}",
+                ),
+            )
+        rmk.add(*buttons)
+        client.send_message(
+            cid,
+            f"{text}" + "\n",
+            parse_mode="Markdown",
+            reply_markup=rmk,
         )
-    rmk.add(*buttons)
-    client.send_message(
-        cid,
-        f"{text}" + "\n",
-        parse_mode="Markdown",
-        reply_markup=rmk,
-    )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
 @client.callback_query_handler(lambda call: call.data.partition("_")[0] == "select")
