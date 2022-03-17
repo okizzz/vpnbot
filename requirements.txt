@@ -1,0 +1,10 @@
+certifi==2021.10.8
+charset-normalizer==2.0.12
+idna==3.3
+pymongo==4.0.2
+pyTelegramBotAPI==4.4.0
+requests==2.27.1
+SimpleQIWI==0.7
+urllib3==1.26.9
+uuid==1.30
+python-dotenv==0.19.2

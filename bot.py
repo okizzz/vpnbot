@@ -1,27 +1,36 @@
 import os
 import random
 import telebot
-import configure
-import sqlite3
 from telebot import types
-import threading
 from SimpleQIWI import *
 from datetime import datetime, timedelta
-
+from dotenv import dotenv_values
 from pymongo import MongoClient
+import sys
 
-mongo_client = MongoClient("mongodb://localhost:27017/")
-db = mongo_client.vpn_bot
+if "-docker" in sys.argv:
+    mongo_client = MongoClient(os.getenv("DB_HOST"), int(os.getenv("DB_PORT")))
+    db = mongo_client[os.getenv("DB_NAME")]
+    client = telebot.TeleBot(os.getenv("TOKEN_BOT"))
+    api = QApi(token=os.getenv("TOKEN_QIWI"), phone=os.getenv("PHONE_QIWI"))
+    public_key_qiwi = os.getenv("PUBLIC_KEY_QIWI")
+    download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
+    help_str = f"[Настройка для windows]({os.getenv('HELP_WINDOWS_URL')})\n[Настройка для mac]({os.getenv('HELP_MAC_URL')})\n[Настройка для android]({os.getenv('HELP_ANDROID_URL')})\n[Настройка для iphone]({os.getenv('HELP_IPHONE_URL')})"
+    pay_help_str = f"[Оплата картой]({os.getenv('CARD_PAY_URL_HELP')})\n[Оплата qiwi]({os.getenv('QIWI_PAY_URL_HELP')})"
+    trial_minutes = os.getenv("TRIAL_MINUTES")
+else:
+    config = dotenv_values(".env")
+    mongo_client = MongoClient("localhost", int(config["DB_PORT"]))
+    db = mongo_client[config["DB_NAME"]]
+    client = telebot.TeleBot(config["TOKEN_BOT"])
+    api = QApi(token=config["TOKEN_QIWI"], phone=config["PHONE_QIWI"])
+    public_key_qiwi = config["PUBLIC_KEY_QIWI"]
+    download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
+    help_str = f"[Настройка для windows]({config['HELP_WINDOWS_URL']})\n[Настройка для mac]({config['HELP_MAC_URL']})\n[Настройка для android]({config['HELP_ANDROID_URL']})\n[Настройка для iphone]({config['HELP_IPHONE_URL']})"
+    pay_help_str = f"[Оплата картой]({config['CARD_PAY_URL_HELP']})\n[Оплата qiwi]({config['QIWI_PAY_URL_HELP']})"
+    trial_minutes = int(config["TRIAL_MINUTES"])
+
 users_collection = db.users
-
-client = telebot.TeleBot(configure.config["tokenbot"])
-api = QApi(token=configure.config["tokenqiwi"], phone=configure.config["phoneqiwi"])
-
-pay_help_str = f"[Оплата картой]({configure.config['pay_card_url']})\n[Оплата qiwi]({configure.config['pay_qiwi_url']})"
-download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
-help_str = f"[Настройка для windows]({configure.config['help_windows_url']})\n[Настройка для mac]({configure.config['help_mac_url']})\n[Настройка для android]({configure.config['help_android_url']})\n[Настройка для iphone]({configure.config['help_windows_url']})"
-
-trial_minutes = 300
 
 
 def check_license(uid, cid):
@@ -34,8 +43,7 @@ def check_license(uid, cid):
 
 
 def get_buy_url(uid, price):
-    publicKey = configure.config["publickey"]
-    link = f"https://oplata.qiwi.com/create?publicKey={publicKey}&amount={price}&comment={uid}"
+    link = f"https://oplata.qiwi.com/create?publicKey={public_key_qiwi}&amount={price}&comment={uid}"
     return link
 
 

@@ -1,0 +1,36 @@
+version: '3.8'
+services:
+  #-----------------------------------------------------------------------#
+  bot:
+    build: .
+    container_name: bot
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DB_HOST: 'db'
+    volumes:
+      - ./vpns:/app/vpns
+    links:
+      - 'db:db'
+    restart: 'always'
+    networks:
+      - backend
+  #-----------------------------------------------------------------------#
+  db:
+    image: mongo
+    container_name: mongodb
+    volumes:
+      - ./mongo:/data/db
+    ports:
+      - 27017:27017
+    expose:
+      - '27017'
+    restart: 'always'
+    networks:
+      - backend
+  #-----------------------------------------------------------------------#
+networks:
+  backend:
+    driver: bridge
