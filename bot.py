@@ -17,7 +17,7 @@ if "-docker" in sys.argv:
     download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
     help_str = f"[Настройка для windows]({os.getenv('HELP_WINDOWS_URL')})\n[Настройка для mac]({os.getenv('HELP_MAC_URL')})\n[Настройка для android]({os.getenv('HELP_ANDROID_URL')})\n[Настройка для iphone]({os.getenv('HELP_IPHONE_URL')})"
     pay_help_str = f"[Оплата картой]({os.getenv('CARD_PAY_URL_HELP')})\n[Оплата qiwi]({os.getenv('QIWI_PAY_URL_HELP')})"
-    trial_minutes = os.getenv("TRIAL_MINUTES")
+    trial_hours = os.getenv("TRIAL_HOURS")
 else:
     config = dotenv_values(".env")
     mongo_client = MongoClient("localhost", int(config["DB_PORT"]))
@@ -28,7 +28,7 @@ else:
     download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
     help_str = f"[Настройка для windows]({config['HELP_WINDOWS_URL']})\n[Настройка для mac]({config['HELP_MAC_URL']})\n[Настройка для android]({config['HELP_ANDROID_URL']})\n[Настройка для iphone]({config['HELP_IPHONE_URL']})"
     pay_help_str = f"[Оплата картой]({config['CARD_PAY_URL_HELP']})\n[Оплата qiwi]({config['QIWI_PAY_URL_HELP']})"
-    trial_minutes = config["TRIAL_MINUTES"]
+    trial_hours = config["TRIAL_HOURS"]
 
 users_collection = db.users
 
@@ -60,7 +60,8 @@ def check_payment(payid, price):
 def set_license(die_to, uid, days):
     new_die_to = die_to + timedelta(days=days)
     db.users.update_one(
-        {"_id": uid}, {"$inc": {"payments": 1}, "$set": {"die_to": new_die_to}}
+        {"_id": uid},
+        {"$inc": {"payments": 1}, "$set": {"die_to": new_die_to}},
     )
 
 
@@ -69,20 +70,26 @@ def start(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
-        current_date = datetime.today() + timedelta(minutes=int(trial_minutes))
+        current_date = datetime.today() + timedelta(hours=int(trial_hours))
         if users_collection.find_one({"_id": uid}) is None:
             users_collection.insert_one(
-                {"_id": uid, "access": 0, "die_to": current_date, "payments": 0}
+                {
+                    "_id": uid,
+                    "access": 0,
+                    "die_to": current_date,
+                    "payments": 0,
+                    "first_promo": False,
+                }
             )
             client.send_message(
                 cid,
-                f"✋ Добро пожаловать!\n\nЭтот бот поможет вам установить vpn на ваши устройства\nБез лицензии вы можете получать случайный сервер раз в день\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд\n\nВам доступно {trial_minutes} минут бесплатного доступа",
+                f"✋ *Добро пожаловать!*\n\nЭтот бот поможет вам установить vpn на ваши устройства\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n👨‍👩‍👧‍👦 Нажмите на /referal для получения информации о реферальной программе\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд\n\nВам доступно {trial_hours} часов бесплатного доступа",
                 parse_mode="Markdown",
             )
         else:
             client.send_message(
                 cid,
-                f"🤝 Вы уже зарегистрированы!\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций",
+                f"🤝 *Вы уже зарегистрированы!*\n\n⏳ Нажмите на /profile для просмотра вашей лицензии\n👨‍👩‍👧‍👦 Нажмите на /referal для получения информации о реферальной программе\n📕 Нажмите на /manuals для помощи активации лицензии и настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n🧾 Нажмите на /help для получения списка всех функций",
                 parse_mode="Markdown",
             )
     except:
@@ -96,7 +103,7 @@ def buy(message):
         uid = message.from_user.id
         if not check_license(uid, cid):
             return
-        text = f"🌏 Выберите сервер"
+        text = f"🌏 *Выберите сервер*"
         rmk = types.InlineKeyboardMarkup(row_width=2)
         buttons = []
         for server in os.listdir("vpns"):
@@ -111,7 +118,7 @@ def buy(message):
         rmk.add(*buttons)
         client.send_message(
             cid,
-            f"{text}" + "\n",
+            text,
             parse_mode="Markdown",
             reply_markup=rmk,
         )
@@ -158,7 +165,7 @@ def myprofile(message):
             accessname = "Разработчик"
         client.send_message(
             cid,
-            f"*📇 Ваш профиль*\n\n*👤 Ваш ID:* {user['_id']}\n*⏳ Ваша лицензия до:* {user['die_to'].strftime('%d-%m-%Y %H:%M')}\n*👑 Ваш уровень доступа:* {accessname}",
+            f"*📇 Ваш профиль*\n\n👤 Ваш ID: `{user['_id']}`\n⏳ Ваша лицензия до: *{user['die_to'].strftime('%d-%m-%Y %H:%M')}*\n👑 Ваш уровень доступа: *{accessname}*\n🎟 Ваш промокод: `U_{user['_id']}`",
             parse_mode="Markdown",
         )
     except:
@@ -196,6 +203,85 @@ def buy(message):
             parse_mode="Markdown",
             reply_markup=rmk,
         )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+
+
+@client.message_handler(commands=["referal"])
+def referal(message):
+    try:
+        cid = message.chat.id
+        uid = message.from_user.id
+        client.send_message(
+            cid,
+            f"👨‍👩‍👧‍👦 *Реферальная программа*\n\n➕ Вы можете приглашать друзей и тем самым продлевать себе лицензию\n\n🤼‍♂️ За каждого приглашенного пользователя вы получите 50 часов бесплатного пользования, приглашенный пользователь получит 150 часов\n\n🎟 Для получения бесплатных часов приглашенный вами пользователь должен применить промокод: `U_{uid}`\n\n🤳 Применить промокод можно через команду: /applypromo",
+            parse_mode="Markdown",
+        )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+
+
+@client.message_handler(commands=["applypromo"])
+def apply_promo(message):
+    try:
+        cid = message.chat.id
+        msg = client.send_message(
+            cid,
+            f"⌨️ Введите промокод",
+            parse_mode="Markdown",
+        )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+
+    client.register_next_step_handler(msg, find_promo)
+
+
+def find_promo(message):
+    try:
+        cid = message.chat.id
+        uid = message.from_user.id
+        if (
+            "U_" in message.text
+            and not message.text == f"U_{uid}"
+            and users_collection.find_one({"_id": int(message.text.partition("_")[2])})
+            and users_collection.find_one({"_id": uid, "first_promo": False})
+        ):
+            users_collection.update_one(
+                {"_id": uid},
+                [
+                    {
+                        "$set": {
+                            "die_to": {
+                                "$dateAdd": {
+                                    "startDate": "$die_to",
+                                    "unit": "hour",
+                                    "amount": 150,
+                                }
+                            },
+                            "first_promo": True,
+                        },
+                    }
+                ],
+            )
+            users_collection.update_one(
+                {"_id": int(message.text.partition("_")[2])},
+                [
+                    {
+                        "$set": {
+                            "die_to": {
+                                "$dateAdd": {
+                                    "startDate": "$die_to",
+                                    "unit": "hour",
+                                    "amount": 50,
+                                }
+                            }
+                        },
+                    }
+                ],
+            )
+            client.reply_to(message, "Промокод применен")
+        else:
+            client.reply_to(message, "Промокод не найден или уже использован")
     except:
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
@@ -261,7 +347,7 @@ def success_pay(call):
 
 
 @client.message_handler(commands=["help"])
-def helpcmd(message):
+def help(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
@@ -282,11 +368,36 @@ def helpcmd(message):
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
-@client.message_handler(commands=["manuals"])
-def myprofile(message):
+@client.message_handler(commands=["support"])
+def support(message):
     try:
         cid = message.chat.id
-        uid = message.from_user.id
+        client.send_message(
+            cid,
+            f"*🆘 Поддержка*\n\n📬 По всем вопросам просьба писать сюда: @withVpn",
+            parse_mode="Markdown",
+        )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+
+
+@client.message_handler(commands=["about"])
+def about(message):
+    try:
+        cid = message.chat.id
+        client.send_message(
+            cid,
+            f"*ℹ️ О нас*\n\n🛰 A long time ago, in a galaxy far, far away…",
+            parse_mode="Markdown",
+        )
+    except:
+        client.send_message(cid, f"🚫 Ошибка при выполнении команды")
+
+
+@client.message_handler(commands=["manuals"])
+def manuals(message):
+    try:
+        cid = message.chat.id
         client.send_message(
             cid,
             f"*📺 Видео инструкции и полезные ссылки*\n\n*💳 Как оплатить лицензию*\n{pay_help_str}\n\n*⬇️ Скачать необходимую программу*\n{download_str}\n\n*🛠 Как настроить*\n{help_str}",
