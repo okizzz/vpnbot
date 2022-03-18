@@ -128,27 +128,23 @@ def buy(message):
 
 @client.callback_query_handler(lambda call: call.data.partition("_")[0] == "select")
 def select_callback(call):
-    try:
-        if call.data.partition("_")[0] == "select":
-            if not check_license(call.from_user.id, call.message.chat.id):
-                return
-            server = call.data.partition("_")[2]
-            configs_dir = f"vpns/{server}"
-            config_file = open(
-                os.path.join(configs_dir, random.choice(os.listdir(configs_dir)))
-            )
-            client.send_document(
-                call.message.chat.id,
-                config_file,
-                caption=f"{server}\n\nНажмите на /manuals для просмотра видео по настройке vpn",
-                visible_file_name=f"{server.replace(' ', '')[:-1]}{datetime.strftime('%H_%M_%d_%m_%Y')}.ovpn".replace(
-                    " ", ""
-                ).lower(),
-                parse_mode="Markdown",
-            )
-        client.answer_callback_query(callback_query_id=call.id)
-    except:
-        client.send_message(call.message.chat.id, f"🚫 Ошибка при выполнении команды")
+
+    if call.data.partition("_")[0] == "select":
+        if not check_license(call.from_user.id, call.message.chat.id):
+            return
+        server = call.data.partition("_")[2]
+        configs_dir = f"vpns/{server}"
+        config_file = open(
+            os.path.join(configs_dir, random.choice(os.listdir(configs_dir)))
+        )
+        client.send_document(
+            call.message.chat.id,
+            config_file,
+            caption=f"{server}\n\nНажмите на /manuals для просмотра видео по настройке vpn",
+            visible_file_name=f"{datetime.now().strftime('%d%m%Y_%H%M')}_{server.replace(' ','')[:-1][:-1]}.ovpn".lower(),
+            parse_mode="Markdown",
+        )
+    client.answer_callback_query(callback_query_id=call.id)
 
 
 @client.message_handler(commands=["profile", "myinfo", "myprofile"])
