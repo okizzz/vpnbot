@@ -179,17 +179,11 @@ def donate(message):
         text = f"😇 *Пожертвовать через qiwi или картой*\n\n"
         payid = str(uid) + str(user["payments"])
         rmk = types.InlineKeyboardMarkup()
-        sum25 = types.InlineKeyboardButton(text="1️⃣ = 25₽", url=get_buy_url(payid, 25))
-        sum75 = types.InlineKeyboardButton(text="3️⃣ = 75₽", url=get_buy_url(payid, 75))
-        sum150 = types.InlineKeyboardButton(
-            text="7️⃣ = 150₽", url=get_buy_url(payid, 150)
-        )
-        sum300 = types.InlineKeyboardButton(
-            text="1️⃣4️⃣ = 300₽", url=get_buy_url(payid, 300)
-        )
-        sum600 = types.InlineKeyboardButton(
-            text="3️⃣0️⃣ = 600₽", url=get_buy_url(payid, 600)
-        )
+        sum25 = types.InlineKeyboardButton(text="25₽", url=get_buy_url(payid, 25))
+        sum75 = types.InlineKeyboardButton(text="75₽", url=get_buy_url(payid, 75))
+        sum150 = types.InlineKeyboardButton(text="150₽", url=get_buy_url(payid, 150))
+        sum300 = types.InlineKeyboardButton(text="300₽", url=get_buy_url(payid, 300))
+        sum600 = types.InlineKeyboardButton(text="600₽", url=get_buy_url(payid, 600))
         success = types.InlineKeyboardButton(
             text="✅ я оплатил!", callback_data="success_pay"
         )
