@@ -31,6 +31,15 @@ services:
     networks:
       - backend
   #-----------------------------------------------------------------------#
+  webserver:
+    image: nginx
+    container_name: nginx
+    volumes:
+      - ./html:/usr/share/nginx/html
+    restart: 'always'
+    ports:
+      - "80:80"
+  #-----------------------------------------------------------------------#
 networks:
   backend:
     driver: bridge
