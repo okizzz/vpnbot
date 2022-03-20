@@ -141,7 +141,7 @@ def select_callback(call):
                 call.message.chat.id,
                 config_file,
                 caption=f"{server}\n\nНажмите на /manuals для просмотра видео по настройке vpn",
-                visible_file_name=f"{datetime.now().strftime('%d%m%Y_%H%M')}_{server}.ovpn".lower(),
+                visible_file_name=f"{datetime.now().strftime('%d%m%Y_%H%M')}_{server.replace(' ','')}.ovpn".lower(),
                 parse_mode="Markdown",
             )
         client.answer_callback_query(callback_query_id=call.id)
