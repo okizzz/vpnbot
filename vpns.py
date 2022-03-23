@@ -58,7 +58,7 @@ def update():
         print("Falied")
 
 
-schedule.every().minute.do(update)
+schedule.every().hour.do(update)
 
 while True:
     schedule.run_pending()
