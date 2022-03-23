@@ -17,7 +17,6 @@ if "-docker" in sys.argv:
     download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
     help_str = f"[Настройка для windows]({os.getenv('HELP_WINDOWS_URL')})\n[Настройка для mac]({os.getenv('HELP_MAC_URL')})\n[Настройка для android]({os.getenv('HELP_ANDROID_URL')})\n[Настройка для iphone]({os.getenv('HELP_IPHONE_URL')})"
     pay_help_str = f"[Оплата картой]({os.getenv('CARD_PAY_URL_HELP')})\n[Оплата qiwi]({os.getenv('QIWI_PAY_URL_HELP')})"
-    trial_hours = os.getenv("TRIAL_HOURS")
     channel = os.getenv("CHANNEL")
 else:
     config = dotenv_values(".env")
@@ -29,7 +28,6 @@ else:
     download_str = f"[Скачать для windows](https://openvpn.net/downloads/openvpn-connect-v3-windows.msi)\n[Скачать для mac](https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg)\n[Скачать для android](https://play.google.com/store/apps/details?id=net.openvpn.openvpn)\n[Скачать для iphone](https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8)"
     help_str = f"[Настройка для windows]({config['HELP_WINDOWS_URL']})\n[Настройка для mac]({config['HELP_MAC_URL']})\n[Настройка для android]({config['HELP_ANDROID_URL']})\n[Настройка для iphone]({config['HELP_IPHONE_URL']})"
     pay_help_str = f"[Оплата картой]({config['CARD_PAY_URL_HELP']})\n[Оплата qiwi]({config['QIWI_PAY_URL_HELP']})"
-    trial_hours = config["TRIAL_HOURS"]
     channel = config["CHANNEL"]
 
 users_collection = db.users
@@ -45,6 +43,7 @@ def check_license(uid, cid):
     if not user["license"]:
         client.send_message(cid, f"⛔️ Лицензия неактивна!\n\nНажмите /buy для оплаты")
         return False
+    return True
 
 
 def check_payment(payid, price):
