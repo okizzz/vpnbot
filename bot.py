@@ -40,11 +40,11 @@ def get_buy_url(uid, price):
     return link
 
 
-def check_channel_exist(uid, cid):
-    if not client.get_chat_member("@withVpnChannel", uid).status == "left":
-        return True
-    client.send_message(cid, f"⛔️ Пожалуйста подпишитесь на наш канал {channel}")
-    return False
+def check_license(uid, cid):
+    user = users_collection.find_one({"_id": uid})
+    if not user["license"]:
+        client.send_message(cid, f"⛔️ Лицензия неактивна!\n\nНажмите /buy для оплаты")
+        return False
 
 
 def check_payment(payid, price):
@@ -64,15 +64,11 @@ def start(message):
         uid = message.from_user.id
         if users_collection.find_one({"_id": uid}) is None:
             users_collection.insert_one(
-                {
-                    "_id": uid,
-                    "access": 0,
-                    "payments": 0,
-                }
+                {"_id": uid, "access": 0, "payments": 0, "license": False}
             )
             client.send_message(
                 cid,
-                f"✋ *Добро пожаловать!*\n\nЭтот бот поможет вам установить vpn на ваши устройства\n\n📲 Для полноценного функционала бота пожалуйста подпишитесь на наш канал @withVpnChannel\n\n📕 Нажмите на /manuals для помощи по настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n😇 Нажмите на /donate для пожертвования\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд",
+                f"✋ *Добро пожаловать!*\n\nЭтот бот поможет вам установить vpn на ваши устройства\n\n📲 Подпишитесь на наш канал @withVpnChannel\n\n📕 Нажмите на /manuals для помощи по настройке vpn подключения\n🗿 Нажмите на /about для получения информации о vpn, боте и создателях бота\n💳 Нажмите на /buy для покупки лицензии\n🧾 Нажмите на /help для получения списка всех функций\n\nКстати слева есть кнопка *≡ Меню*, там тоже список всех команд",
                 parse_mode="Markdown",
             )
         else:
@@ -95,7 +91,7 @@ def servers(message):
                 cid, f"🔄 Список обновляется, нажмите на /servers через пару секунд"
             )
             return
-        if not check_channel_exist(uid, cid):
+        if not check_license(uid, cid):
             return
         text = f"🌏 *Выберите сервер*"
         rmk = types.InlineKeyboardMarkup(row_width=2)
@@ -130,7 +126,7 @@ def select_callback(call):
             )
             return
         if call.data.partition("_")[0] == "select":
-            if not check_channel_exist(call.from_user.id, call.message.chat.id):
+            if not check_license(call.from_user.id, call.message.chat.id):
                 return
             server = call.data.partition("_")[2]
             configs_dir = f"vpns/old/{server}"
@@ -155,43 +151,42 @@ def myprofile(message):
         cid = message.chat.id
         uid = message.from_user.id
         user = users_collection.find_one({"_id": uid})
+        license = "неактивна"
         if user["access"] == 0:
             accessname = "Пользователь"
         elif user["access"] == 1:
             accessname = "Администратор"
         elif user["access"] == 777:
             accessname = "Разработчик"
+        if user["license"]:
+            license = "активна"
         client.send_message(
             cid,
-            f"*📇 Ваш профиль*\n\n👤 Ваш ID: `{user['_id']}`\n👑 Ваш уровень доступа: *{accessname}*",
+            f"*📇 Ваш профиль*\n\n👤 Ваш ID: `{user['_id']}`\n👑 Ваш уровень доступа: *{accessname}*\n🎟 Ваша лицензия: *{license}*",
             parse_mode="Markdown",
         )
     except:
         client.send_message(cid, f"🚫 Ошибка при выполнении команды")
 
 
-@client.message_handler(commands=["donate"])
-def donate(message):
+@client.message_handler(commands=["buy"])
+def buy(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
         user = users_collection.find_one({"_id": uid})
-        text = f"😇 *Пожертвовать через qiwi или картой*\n\n"
+        text = f"😇 *Оплатить через qiwi или картой*\n\n"
         payid = str(uid) + str(user["payments"])
         rmk = types.InlineKeyboardMarkup()
-        sum25 = types.InlineKeyboardButton(text="25₽", url=get_buy_url(payid, 25))
-        sum75 = types.InlineKeyboardButton(text="75₽", url=get_buy_url(payid, 75))
-        sum150 = types.InlineKeyboardButton(text="150₽", url=get_buy_url(payid, 150))
         sum300 = types.InlineKeyboardButton(text="300₽", url=get_buy_url(payid, 300))
-        sum600 = types.InlineKeyboardButton(text="600₽", url=get_buy_url(payid, 600))
         success = types.InlineKeyboardButton(
             text="✅ я оплатил!", callback_data="success_pay"
         )
-        rmk.add(sum25, sum75, sum150, sum300, sum600)
+        rmk.add(sum300)
         rmk.add(success)
         client.send_message(
             cid,
-            f"{text}1. Оплатите желаемую сумму\n2. Нажмите *✅ я оплатил*",
+            f"{text}1. Оплатите лицензию\n2. Нажмите *✅ я оплатил*",
             parse_mode="Markdown",
             reply_markup=rmk,
         )
@@ -207,47 +202,15 @@ def success_pay(call):
             cid = call.message.chat.id
             user = users_collection.find_one({"_id": uid})
             payid = str(uid) + str(user["payments"])
-            if check_payment(payid, 25):
-                client.send_message(
-                    cid,
-                    f"✅ Спасибо за пожертвование в 25 рублей!\n\nНажмите /servers для выбор сервера",
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True,
-                )
-                return
-            if check_payment(payid, 75):
-                client.send_message(
-                    cid,
-                    f"✅ Спасибо за пожертвование в 75 рублей!\nЭтим вы помогаете сервису развиваться\n\nНажмите /servers для выбор сервера",
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True,
-                )
-                return
-            if check_payment(payid, 150):
-                client.send_message(
-                    cid,
-                    f"✅ Спасибо за пожертвование в 150 рублей!\nЭтим вы помогаете сервису развиваться\n\nНажмите /servers для выбор сервера",
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True,
-                )
-                return
             if check_payment(payid, 300):
                 client.send_message(
                     cid,
-                    f"✅ Спасибо за пожертвование в 300 рублей!\nЭтим вы помогаете сервису развиваться\n\nНажмите /servers для выбор сервера",
+                    f"✅ Лицензия оплачена!\n\nНажмите /servers для выбор сервера",
                     parse_mode="Markdown",
                     disable_web_page_preview=True,
                 )
                 return
-            if check_payment(payid, 600):
-                client.send_message(
-                    cid,
-                    f"✅ Спасибо за пожертвование в 600 рублей!\nЭтим вы помогаете сервису развиваться\n\nНажмите /servers для выбор сервера",
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True,
-                )
-                return
-        client.send_message(cid, "🚫 Пожертвование не найдено!")
+        client.send_message(cid, "🚫 Оплата не найдена!")
         client.answer_callback_query(callback_query_id=call.id)
 
     except:
@@ -263,13 +226,13 @@ def help(message):
         if user["access"] >= 1:
             client.send_message(
                 cid,
-                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/donate - пожертвовать\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
+                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
                 parse_mode="Markdown",
             )
         else:
             client.send_message(
                 cid,
-                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/donate - пожертвовать\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
+                "*🧾 Список команд*\n\n/start - старт бота\n/profile - ваш профиль\n/buy - купить лицензию\n/manuals - инструкции\n/servers - показать vpn сервера\n/support - написать в поддержку\n/about - о боте и создателях\n/help - список команд",
                 parse_mode="Markdown",
             )
     except:
@@ -307,9 +270,6 @@ def manuals(message):
     try:
         cid = message.chat.id
         uid = message.from_user.id
-        if not check_channel_exist(uid, cid):
-            return
-
         client.send_message(
             cid,
             f"*📺 Полезные ссылки и видео инструкции*\n\n*⬇️ Скачать необходимую программу*\n{download_str}\n\n*🛠 Как настроить*\n{help_str}",

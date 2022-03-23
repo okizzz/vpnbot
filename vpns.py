@@ -30,6 +30,11 @@ def update():
                 f.readlines()[1:-1],
             )
             for row in csv_file:
+                if (
+                    row["CountryLong"] == "United States"
+                    or row["CountryLong"] == "China"
+                ):
+                    continue
                 if not os.path.exists(f"vpns/new/{row['CountryLong']}"):
                     os.mkdir(f"vpns/new/{row['CountryLong']}")
                 vpn_file = open(f"vpns/new/{row['CountryLong']}/{row['IP']}.ovpn", "w")
@@ -53,7 +58,7 @@ def update():
         print("Falied")
 
 
-schedule.every().hour.do(update)
+schedule.every().minute.do(update)
 
 while True:
     schedule.run_pending()
